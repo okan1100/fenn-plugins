@@ -1,0 +1,10 @@
+id      = "dice"
+name    = "Dice · Zar"
+icon    = "dice-five"
+size    = "large"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [568, 500]
+description = "Roll dice (d4-d20) and flip a coin, with total and history. / Zar at (d4-d20) ve madeni para cevir; toplam ve gecmis listesi."
+author  = "fenn-plugins"
+version = "1.0.0"

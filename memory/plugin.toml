@@ -1,0 +1,10 @@
+id      = "memory"
+name    = "Memory · Hafıza"
+icon    = "brain"
+size    = "wide"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [400, 500]
+description = "4x4 icon matching game with moves, timer and best score. / 4x4 ikon eslestirme oyunu: hamle sayaci, sure ve en iyi skor."
+author  = "fenn-plugins"
+version = "1.0.0"
