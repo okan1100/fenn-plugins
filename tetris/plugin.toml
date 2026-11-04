@@ -1,0 +1,10 @@
+id = "tetris"
+name = "Tetris · Bloklar"
+icon = "squares-four"
+size = "large"
+run = ["node", "main.js"]
+mode = "live"
+page_size = [568, 320]
+description = "Falling-block puzzle with levels and line clears. Seviyeli, satır silen blok bulmacası."
+author = "fenn-plugins"
+version = "1.0.0"

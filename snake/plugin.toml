@@ -1,0 +1,10 @@
+id = "snake"
+name = "Snake · Yılan"
+icon = "game-controller"
+size = "large"
+run = ["node", "main.js"]
+mode = "live"
+page_size = [568, 320]
+description = "Classic snake game with score and speed-up. Klasik yılan oyunu; skor ve hızlanma."
+author = "fenn-plugins"
+version = "1.0.0"
