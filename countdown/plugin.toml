@@ -1,0 +1,10 @@
+id      = "countdown"
+name    = "Countdown · Gün Sayacı"
+icon    = "clock-countdown"
+size    = "large"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [568, 320]
+description = "Days left until your important dates, with yearly repeats. / Önemli günlere kalan gün sayısı, yıllık tekrarlarla."
+author  = "fenn-plugins"
+version = "1.0.0"

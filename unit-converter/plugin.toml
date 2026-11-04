@@ -1,0 +1,10 @@
+id      = "unit-converter"
+name    = "Unit Converter · Birim Çevirici"
+icon    = "calculator"
+size    = "wide"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [568, 300]
+description = "Convert length, mass, temperature, area, volume and speed units. / Uzunluk, kütle, sıcaklık, alan, hacim ve hız birimlerini çevirir."
+author  = "fenn-plugins"
+version = "1.0.0"

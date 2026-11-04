@@ -1,0 +1,10 @@
+id      = "password-gen"
+name    = "Password Generator · Parola Üretici"
+icon    = "lock-key"
+size    = "small"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [568, 300]
+description = "Generate random passwords with a strength meter. / Güç göstergesiyle rastgele parolalar üretir."
+author  = "fenn-plugins"
+version = "1.0.0"
