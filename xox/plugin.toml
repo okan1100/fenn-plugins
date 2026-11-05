@@ -1,0 +1,10 @@
+id      = "xox"
+name    = "XOX · Tic-Tac-Toe"
+icon    = "grid-four"
+size    = "wide"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [520, 380]
+description = "Tic-tac-toe against the computer (win/block AI), big board and session score. Bilgisayara karsi XOX: kazan/blokla yapay zekasi, buyuk tahta ve oturum skoru."
+author  = "fenn-plugins"
+version = "1.0.0"

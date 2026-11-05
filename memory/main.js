@@ -5,6 +5,12 @@
 "use strict";
 
 const fenn = require("./fenn");
+// Fenn 0.4.0 uyumluluk: `row` + align:"center" satiri dikey yayiyor; varsayilan hizalama sikipaketler.
+const _row = fenn.row;
+fenn.row = (c, o = {}) => {
+  if (o.align === "center") { const { align, ...rest } = o; return _row(c, rest); }
+  return _row(c, o);
+};
 const app = new fenn.Plugin();
 
 // ---- Strings (TR + EN) -------------------------------------------------

@@ -1,10 +1,20 @@
 // Tetris (Bloklar) — a mini game plugin for Fenn, the floating notch for Windows.
-// Live mode: 10x18 canvas board, next-piece preview, on-screen buttons and
-// keyboard (arrows / WASD / Space / Enter / Escape). Score, best and language
-// persist in FENN_DATA_DIR via app.load / app.save.
+// Live mode: a big 10x18 canvas board on the left (20 pt cells, the cell fills
+// the page height) and a tight vertical panel on the right (score cards, a
+// next-piece preview, a 2x2 button D-pad with hard drop, action buttons).
+// Score, best and language persist in FENN_DATA_DIR via app.load / app.save.
+//
+// Layout, top-packed, no spacers, no justify (page 680x440 -> content 648x372):
+// main row = board 200x360 | panel 170. Height budget: 360 <= 372.
 "use strict";
 
 const fenn = require("./fenn");
+// Fenn 0.4.0 uyumluluk: `row` + align:"center" satiri dikey yayiyor; varsayilan hizalama sikipaketler.
+const _row = fenn.row;
+fenn.row = (c, o = {}) => {
+  if (o.align === "center") { const { align, ...rest } = o; return _row(c, rest); }
+  return _row(c, o);
+};
 const app = new fenn.Plugin();
 
 // ---------------------------------------------------------------- i18n
@@ -25,6 +35,7 @@ const T = {
     restart: "Restart",
     rotate: "Rotate",
     drop: "Drop",
+    softDrop: "Soft drop",
     readyTitle: "Ready?",
     readyHint: "Press Start or Enter",
     pausedTitle: "Paused",
@@ -32,6 +43,9 @@ const T = {
     overTitle: "Game over",
     overHint: "Restart or Enter plays again",
     langTip: "Switch language (Türkçe)",
+    padTip: "Move · rotate",
+    dirLeft: "Left",
+    dirRight: "Right",
     keysHint: "←→: move · ↑/W: rotate · ↓: soft drop · Space: hard drop · Esc: pause",
   },
   tr: {
@@ -50,6 +64,7 @@ const T = {
     restart: "Yeniden başlat",
     rotate: "Döndür",
     drop: "Bırak",
+    softDrop: "Yavaş düşür",
     readyTitle: "Hazır mısın?",
     readyHint: "Başlat'a veya Enter'a bas",
     pausedTitle: "Duraklatıldı",
@@ -57,6 +72,9 @@ const T = {
     overTitle: "Oyun bitti",
     overHint: "Yeniden başlat veya Enter",
     langTip: "Dil değiştir (English)",
+    padTip: "Hareket · döndür",
+    dirLeft: "Sol",
+    dirRight: "Sağ",
     keysHint: "←→: hareket · ↑/W: döndür · ↓: yavaş düşür · Space: hızlı düşür · Esc: duraklat",
   },
 };
@@ -67,13 +85,30 @@ let lang = app.load("lang", sysLang);
 if (lang !== "tr" && lang !== "en") lang = sysLang;
 const t = (k) => (T[lang] && T[lang][k] !== undefined ? T[lang][k] : T.en[k] !== undefined ? T.en[k] : k);
 
-// ---------------------------------------------------------------- pieces
+// ---------------------------------------------------------------- geometry
 const COLS = 10;
 const ROWS = 18;
-const CELL = 12;
-const BOARD_W = COLS * CELL; // 120
-const BOARD_H = ROWS * CELL; // 216
+const GAP = 9;       // side panel stack gap
+const MAIN_GAP = 10; // board | panel
+const PANEL_W = 170;
+const BTN_W = 140;   // action buttons: one column, never wrapping
+const PAD_BTN = 40;  // d-pad buttons (~40x32 pt)
 
+// The room the view has, in points. Fenn reports it in `layout`; until then
+// assume page_size [680, 440] minus Fenn's chrome (32 wide, 68 tall).
+let pageW = 648;
+let pageH = 372;
+
+// Board cell: the board is the flexible element, so it fills the page height
+// (18 x 20 = 360 at full size; 21 would be 378 > 372) and never overflows the
+// width. The next-piece preview uses the same cell.
+function cellSize() {
+  const byH = Math.floor(pageH / ROWS);
+  const byW = Math.floor((pageW - PANEL_W - MAIN_GAP) / COLS);
+  return Math.max(8, Math.min(22, byH, byW));
+}
+
+// ---------------------------------------------------------------- pieces
 const SHAPES = {
   I: { color: "#22D3EE", size: 4, cells: [[0, 1], [1, 1], [2, 1], [3, 1]] },
   O: { color: "#FACC15", size: 2, cells: [[0, 0], [1, 0], [0, 1], [1, 1]] },
@@ -93,7 +128,7 @@ const state = {
 };
 
 let board = [];
-let cur = null; // { cells, x, y, color }
+let cur = null; // { cells, x, y, color, size }
 let nextType = "T";
 let bag = [];
 
@@ -318,16 +353,19 @@ function tileView() {
   ], { gap: 2, align: "center", justify: "center" });
 }
 
-function cellRect(x, y, color) {
-  return fenn.shape.rect(x * CELL + 1.5, y * CELL + 1.5, CELL - 3, CELL - 3, { radius: 3, fill: color });
+function cellRect(x, y, cell, color) {
+  return fenn.shape.rect(x * cell + 2, y * cell + 2, cell - 4, cell - 4, { radius: 5, fill: color });
 }
 
 function boardShapes() {
+  const cell = cellSize();
+  const w = COLS * cell;
+  const h = ROWS * cell;
   const s = [];
-  s.push(fenn.shape.rect(0, 0, BOARD_W, BOARD_H, { radius: 8, fill: "transparent", stroke: "faint", width: 1 }));
+  s.push(fenn.shape.rect(0, 0, w, h, { radius: 10, fill: "transparent", stroke: "faint", width: 1 }));
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
-      if (board[y][x] !== null) s.push(cellRect(x, y, board[y][x]));
+      if (board[y][x] !== null) s.push(cellRect(x, y, cell, board[y][x]));
     }
   }
   if (cur && state.screen !== "over") {
@@ -336,18 +374,19 @@ function boardShapes() {
     if (gy !== cur.y) {
       for (const [cx, cy] of cur.cells) {
         if (gy + cy >= 0) {
-          s.push(fenn.shape.rect((cur.x + cx) * CELL + 1.5, (gy + cy) * CELL + 1.5, CELL - 3, CELL - 3, {
-            radius: 3, stroke: cur.color, width: 1,
+          s.push(fenn.shape.rect((cur.x + cx) * cell + 2, (gy + cy) * cell + 2, cell - 4, cell - 4, {
+            radius: 5, stroke: cur.color, width: 1,
           }));
         }
       }
     }
     for (const [cx, cy] of cur.cells) {
-      if (cur.y + cy >= 0) s.push(cellRect(cur.x + cx, cur.y + cy, cur.color));
+      if (cur.y + cy >= 0) s.push(cellRect(cur.x + cx, cur.y + cy, cell, cur.color));
     }
   }
   if (state.screen !== "playing") {
-    s.push(fenn.shape.rect(0, 0, BOARD_W, BOARD_H, { radius: 8, fill: "#0F172AB8" }));
+    s.push(fenn.shape.rect(0, 0, w, h, { radius: 10, fill: "#0F172AB8" }));
+    const cx = w / 2;
     let title = t("readyTitle");
     let hint = t("readyHint");
     if (state.screen === "paused") {
@@ -357,91 +396,101 @@ function boardShapes() {
       title = t("overTitle");
       hint = t("overHint");
     }
-    s.push(fenn.shape.text(BOARD_W / 2, BOARD_H / 2 - 30, title, { size: 17, color: "white", anchor: "center", bold: true }));
+    s.push(fenn.shape.text(cx, h / 2 - cell * 1.5, title, { size: Math.round(cell * 0.9), color: "white", anchor: "center", bold: true }));
     if (state.screen === "over") {
-      s.push(fenn.shape.text(BOARD_W / 2, BOARD_H / 2 - 2, `${t("score")}: ${state.score}`, { size: 12, color: "white", anchor: "center" }));
-      s.push(fenn.shape.text(BOARD_W / 2, BOARD_H / 2 + 14, `${t("best")}: ${state.best}`, { size: 12, color: "white", anchor: "center" }));
+      s.push(fenn.shape.text(cx, h / 2 - cell * 0.1, `${t("score")}: ${state.score}   ·   ${t("best")}: ${state.best}`, { size: Math.round(cell * 0.6), color: "white", anchor: "center" }));
     }
-    s.push(fenn.shape.text(BOARD_W / 2, BOARD_H / 2 + (state.screen === "over" ? 38 : -2), hint, { size: 11, color: "white", anchor: "center" }));
+    s.push(fenn.shape.text(cx, h / 2 + cell * (state.screen === "over" ? 1.9 : -0.1), hint, { size: Math.round(cell * 0.55), color: "white", anchor: "center" }));
   }
   return s;
 }
 
 function previewShapes() {
-  const P = 48; // 4x4 cells at 12 pt
-  const s = [fenn.shape.rect(0, 0, P, P, { radius: 8, fill: "transparent", stroke: "faint", width: 1 })];
+  const cell = cellSize();
+  const P = cell * 4;
+  const s = [fenn.shape.rect(0, 0, P, P, { radius: 10, fill: "transparent", stroke: "faint", width: 1 })];
   const def = SHAPES[nextType];
   if (def) {
     const xs = def.cells.map(([x]) => x);
     const ys = def.cells.map(([, y]) => y);
-    const w = Math.max(...xs) - Math.min(...xs) + 1;
-    const h = Math.max(...ys) - Math.min(...ys) + 1;
-    const ox = (P / CELL - w) / 2 - Math.min(...xs);
-    const oy = (P / CELL - h) / 2 - Math.min(...ys);
+    const bw = Math.max(...xs) - Math.min(...xs) + 1;
+    const bh = Math.max(...ys) - Math.min(...ys) + 1;
+    const ox = (4 - bw) / 2 - Math.min(...xs);
+    const oy = (4 - bh) / 2 - Math.min(...ys);
     for (const [cx, cy] of def.cells) {
-      s.push(fenn.shape.rect((cx + ox) * CELL + 1.5, (cy + oy) * CELL + 1.5, CELL - 3, CELL - 3, {
-        radius: 3, fill: def.color,
+      s.push(fenn.shape.rect((cx + ox) * cell + 2, (cy + oy) * cell + 2, cell - 4, cell - 4, {
+        radius: 5, fill: def.color,
       }));
     }
   }
   return s;
 }
 
-function pageView() {
-  const startLabel = state.screen === "paused" ? t("resume") : t("start");
+function statCell(label, value) {
   return fenn.column([
+    fenn.text(label, { size: "small", color: "dim" }),
+    fenn.text(String(value), { size: "title", bold: true }),
+  ], { gap: 0, align: "center" });
+}
+
+function padView() {
+  const btn = (id, icon, tip) => fenn.button(id, { icon, width: PAD_BTN, tooltip: tip });
+  return fenn.column([
+    fenn.row([btn("up", "caret-up", t("rotate")), btn("down", "caret-down", t("softDrop"))], { gap: 8 }),
+    fenn.row([btn("left", "caret-left", t("dirLeft")), btn("right", "caret-right", t("dirRight"))], { gap: 8 }),
+  ], { gap: 8, tooltip: t("padTip") });
+}
+
+function panelView() {
+  const startLabel = state.screen === "paused" ? t("resume") : t("start");
+  // Height budget (page_size [680, 440]; content = 440 - 68 = 372 pt):
+  //   stats card 56 + gap 9 + next row 80 + gap 9 + pad row 72 + gap 9
+  //   + actions 112 = 347 <= 372  (top-packed; the board fills the page)
+  return fenn.column([
+    fenn.card([
+      fenn.grid(3, [
+        statCell(t("score"), state.score),
+        statCell(t("best"), state.best),
+        statCell(t("level"), state.level),
+      ], { gap: 6 }),
+    ], { padding: 8 }),
     fenn.row([
-      fenn.text(statusLabel(), { size: "title" }),
-      fenn.spacer(),
-      fenn.text(`${t("score")}: ${state.score}`, { size: "body", color: "dim" }),
-      fenn.text(`${t("best")}: ${state.best}`, { size: "body", color: "faint" }),
-      fenn.button("lang", { icon: "translate", tooltip: t("langTip") }),
-    ], { gap: 10, align: "center" }),
-    fenn.row([
-      fenn.canvas(BOARD_H, boardShapes(), { width: BOARD_W, id: "board", keys: true }),
+      fenn.canvas(cellSize() * 4, previewShapes(), { width: cellSize() * 4, tooltip: t("next") }),
       fenn.column([
-        fenn.row([
-          fenn.column([
-            fenn.text(t("next"), { size: "small", color: "dim" }),
-            fenn.canvas(48, previewShapes(), { width: 48 }),
-          ], { gap: 4 }),
-          fenn.column([
-            fenn.text(`${t("level")}: ${state.level}`, { size: "body" }),
-            fenn.text(`${t("lines")}: ${state.lines}`, { size: "body", color: "dim" }),
-          ], { gap: 6 }),
-          fenn.spacer(),
-          fenn.column([
-            fenn.button("rotate", { icon: "arrows-clockwise", label: t("rotate") }),
-            fenn.button("drop", { icon: "lightning", label: t("drop") }),
-          ], { gap: 4 }),
-        ], { gap: 14, align: "start" }),
-        fenn.column([
-          fenn.row([fenn.button("up", { icon: "caret-up" })], { align: "center" }),
-          fenn.row([
-            fenn.button("left", { icon: "caret-left" }),
-            fenn.button("down", { icon: "caret-down" }),
-            fenn.button("right", { icon: "caret-right" }),
-          ], { gap: 4 }),
-        ], { gap: 4, align: "center" }),
-        fenn.row([
-          fenn.button("start", { icon: "play", label: startLabel, primary: true }),
-          fenn.button("pause", { icon: "pause", label: t("pause") }),
-          fenn.button("restart", { icon: "arrow-clockwise", label: t("restart") }),
-        ], { gap: 6 }),
-        fenn.text(t("keysHint"), { size: "small", color: "faint", wrap: true }),
-      ], { gap: 8 }),
-    ], { gap: 14, align: "start" }),
-  ], { gap: 8, scroll: true });
+        fenn.text(t("next"), { size: "small", color: "dim" }),
+        fenn.text(`${t("lines")}: ${state.lines}`, { size: "small", color: "faint" }),
+      ], { gap: 2 }),
+    ], { gap: 8, align: "center" }),
+    fenn.row([
+      padView(),
+      fenn.button("drop", { icon: "lightning", width: PAD_BTN, tooltip: t("drop") }),
+    ], { gap: 8, align: "center" }),
+    fenn.column([
+      fenn.button("start", { icon: "play", label: startLabel, primary: true, width: BTN_W }),
+      fenn.button("pause", { icon: "pause", label: t("pause"), width: BTN_W }),
+      fenn.button("restart", { icon: "arrow-clockwise", label: t("restart"), width: BTN_W }),
+    ], { gap: 8 }),
+  ], { gap: GAP });
+}
+
+function pageView() {
+  const cell = cellSize();
+  return fenn.row([
+    fenn.canvas(ROWS * cell, boardShapes(), {
+      width: COLS * cell, id: "board", keys: true, tooltip: t("keysHint"),
+    }),
+    panelView(),
+  ], { gap: MAIN_GAP, align: "start" });
 }
 
 let lastTileKey = null;
 function draw(force) {
-  const key = `${lang}|${state.screen}|${state.score}|${state.best}`;
+  const key = `${lang}|${state.screen}|${state.score}|${state.best}|${state.level}|${state.lines}`;
   if (force || key !== lastTileKey) {
     lastTileKey = key;
     app.setTile(tileView());
   }
-  app.setPage(pageView());
+  app.setPage(pageView(), [{ id: "lang", icon: "translate", tooltip: t("langTip") }]);
   ensureLoop(); // level-ups change the fall speed
 }
 
@@ -482,7 +531,7 @@ function onKey(value) {
 app.on("board", (e) => {
   if (!e || typeof e !== "object") return;
   if (e.kind === "key") onKey(e.value);
-  // Board clicks are ignored: the buttons and keyboard drive the game.
+  // Board clicks are ignored: the pad and keyboard drive the game.
 });
 
 app.on("up", () => {
@@ -497,9 +546,6 @@ app.on("left", () => {
 app.on("right", () => {
   if (move(1)) draw();
 });
-app.on("rotate", () => {
-  if (rotate()) draw();
-});
 app.on("drop", () => hardDrop());
 app.on("start", () => startOrResume());
 app.on("pause", () => {
@@ -509,7 +555,20 @@ app.on("restart", () => newGame());
 app.on("lang", () => {
   lang = lang === "tr" ? "en" : "tr";
   app.save("lang", lang);
-  draw();
+  draw(true);
+});
+
+app.onMessage("layout", (m) => {
+  // The room the page gives us: the board fills it.
+  if (!m || m.target !== "page") return;
+  const w = Number(m.width);
+  const h = Number(m.height);
+  if (!(w > 0) || !(h > 0)) return;
+  if (w !== pageW || h !== pageH) {
+    pageW = w;
+    pageH = h;
+    draw(true);
+  }
 });
 
 app.onMessage("theme", () => {

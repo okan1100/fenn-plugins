@@ -1,0 +1,10 @@
+id      = "pomodoro"
+name    = "Pomodoro · Odak"
+icon    = "timer"
+size    = "wide"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [568, 300]
+description = "Focus & break timer: big countdown ring, 25/5/15 presets, cycle and daily focus count. Odak ve mola zamaniyicisi: buyuk geri sayim halkasi, 25/5/15 on ayar, dongu ve gunluk odak sayisi."
+author  = "fenn-plugins"
+version = "1.0.0"

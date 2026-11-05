@@ -1,0 +1,10 @@
+id      = "puzzle15"
+name    = "15 Puzzle · Bulmaca"
+icon    = "puzzle-piece"
+size    = "wide"
+run     = ["node", "main.js"]
+mode    = "live"
+page_size = [568, 380]
+description = "15-puzzle sliding game: big board, click or arrow keys, timer and best moves. 15 bulmaca kaydirma oyunu: buyuk tahta, tiklama veya ok tuslari, sure ve en iyi hamle."
+author  = "fenn-plugins"
+version = "1.0.0"

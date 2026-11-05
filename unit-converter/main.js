@@ -3,6 +3,12 @@
 // Live plugin: redraws only on events. Results go to a separate text; the
 // inputs never receive echoed values, so the user's typing is kept.
 const fenn = require("./fenn");
+// Fenn 0.4.0 uyumluluk: `row` + align:"center" satiri dikey yayiyor; varsayilan hizalama sikipaketler.
+const _row = fenn.row;
+fenn.row = (c, o = {}) => {
+  if (o.align === "center") { const { align, ...rest } = o; return _row(c, rest); }
+  return _row(c, o);
+};
 const app = new fenn.Plugin();
 
 // ---- strings (TR + EN) ----
@@ -217,35 +223,68 @@ function tileView() {
   ], { gap: 0, justify: "center" });
 }
 
+// Unit selection: plain rows of fixed-width buttons (max 5 per row, balanced
+// chunks) instead of a multi-row grid, so rows never stretch or spread.
+// A 96 pt button + 4 pt gaps keeps even 5-button rows inside ~530 pt.
+const UNIT_BTN_W = 96;
+
+function unitButtons(prefix, cat, selectedIdx, start, count) {
+  const out = [];
+  for (let j = 0; j < count && start + j < cat.units.length; j++) {
+    const i = start + j;
+    const u = cat.units[i];
+    out.push(fenn.button(prefix + ":" + i, {
+      label: u.s,
+      tooltip: u[lang],
+      primary: i === selectedIdx,
+      width: UNIT_BTN_W,
+    }));
+  }
+  return out;
+}
+
+function unitRows(prefix, cat, selectedIdx) {
+  const n = cat.units.length;
+  const rows = Math.ceil(n / 5);
+  const per = Math.ceil(n / rows);
+  const out = [];
+  for (let start = 0; start < n; start += per) {
+    out.push(fenn.row(unitButtons(prefix, cat, selectedIdx, start, per), { gap: 4, align: "center" }));
+  }
+  return out;
+}
+
+// Layout rules: no spacers, justify start, gap 8, nothing spreads. Vertical
+// flow: category chips -> From (label + input + swap + lang) -> unit rows ->
+// To (label + input) -> unit rows -> result -> example line.
+// Height budget (page_size [568, 420]; content = 420 - 45 = 375 pt):
+//   chips 32 + gap 8 + from row 40 + gap 8 + unit row 30 + gap 8 + unit row 30
+//   + gap 8 + to row 40 + gap 8 + unit row 30 + gap 8 + unit row 30
+//   + gap 8 + result 22 + gap 8 + example 18 = 336 <= 375 (7-unit categories;
+//   3-5-unit categories have one unit row per side: 268 <= 375)
 function pageView() {
   const t = T[lang];
   const cat = CATS[catIdx];
   const pair = sel[cat.key];
   const res = resultLine();
-  return fenn.column([
-    fenn.row([fenn.spacer(), fenn.button("lang", { icon: "translate", tooltip: t.langName })], { align: "center" }),
+  const kids = [
     fenn.chips("cat", CATS.map((c) => c[lang]), catIdx),
     fenn.row([
-      fenn.column([
-        fenn.text(t.fromLabel, { size: "small", color: "dim" }),
-        fenn.chips("ufrom", cat.units.map((u) => u.s), pair[0]),
-      ], { gap: 2 }),
-      fenn.spacer(),
+      fenn.text(t.fromLabel, { size: "small", color: "dim" }),
+      fenn.textInput("val:from", "", { hint: t.valueHint, live: true, width: 300 }),
       fenn.button("swap", { icon: "swap", tooltip: t.swapTip }),
-      fenn.spacer(),
-      fenn.column([
-        fenn.text(t.toLabel, { size: "small", color: "dim" }),
-        fenn.chips("uto", cat.units.map((u) => u.s), pair[1]),
-      ], { gap: 2 }),
+      fenn.button("lang", { icon: "translate", tooltip: t.langName }),
     ], { gap: 8, align: "center" }),
-    fenn.row([
-      fenn.textInput("val:from", "", { hint: t.valueHint, live: true, width: 210 }),
-      fenn.spacer(),
-      fenn.textInput("val:to", "", { hint: t.valueHint, live: true, width: 210 }),
-    ], { gap: 8, align: "center" }),
-    fenn.text(res.text, { size: "body", mono: res.mono, color: res.dim ? "dim" : "text" }),
-    fenn.text(factorLine(), { size: "small", color: "dim" }),
-  ], { gap: 8, scroll: true });
+  ];
+  for (const r of unitRows("ufrom", cat, pair[0])) kids.push(r);
+  kids.push(fenn.row([
+    fenn.text(t.toLabel, { size: "small", color: "dim" }),
+    fenn.textInput("val:to", "", { hint: t.valueHint, live: true, width: 300 }),
+  ], { gap: 8, align: "center" }));
+  for (const r of unitRows("uto", cat, pair[1])) kids.push(r);
+  kids.push(fenn.text(res.text, { size: "body", mono: res.mono, color: res.dim ? "dim" : "text", wrap: true }));
+  kids.push(fenn.text(factorLine(), { size: "small", color: "dim", wrap: true }));
+  return fenn.column(kids, { gap: 8, justify: "start", scroll: true });
 }
 
 function draw() {
@@ -286,11 +325,14 @@ function route(e) {
     }
     return;
   }
-  if (id === "ufrom" || id === "uto") {
+  // Unit buttons: ufrom:<index> / uto:<index> (chips-style events accepted too)
+  const um = /^(ufrom|uto):(\d+)$/.exec(id);
+  const ui = um ? Number(um[2]) : (id === "ufrom" || id === "uto" ? chipIndex(value) : -1);
+  if (ui >= 0 && (um || id === "ufrom" || id === "uto")) {
     const cat = CATS[catIdx];
-    const i = chipIndex(value);
-    if (i >= 0 && i < cat.units.length) {
-      sel[cat.key][id === "ufrom" ? 0 : 1] = i;
+    if (ui < cat.units.length) {
+      const which = um ? um[1] : id;
+      sel[cat.key][which === "ufrom" ? 0 : 1] = ui;
       save();
       draw();
     }

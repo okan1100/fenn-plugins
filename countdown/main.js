@@ -2,6 +2,12 @@
 // Countdown · Gün Sayacı — days left until important dates.
 // Live plugin: redraws on events and, once a minute, only when the day changed.
 const fenn = require("./fenn");
+// Fenn 0.4.0 uyumluluk: `row` + align:"center" satiri dikey yayiyor; varsayilan hizalama sikipaketler.
+const _row = fenn.row;
+fenn.row = (c, o = {}) => {
+  if (o.align === "center") { const { align, ...rest } = o; return _row(c, rest); }
+  return _row(c, o);
+};
 const app = new fenn.Plugin();
 
 // ---- strings (TR + EN) ----
@@ -142,38 +148,46 @@ function dayLabel(d) {
   return { text: t.daysAgo(-d), color: "dim" };
 }
 
+// Each row is a 2-cell grid, so the row can never exceed the page width: the
+// name/subtitle cell cuts with "…" and the day text + delete button stay in
+// their own fixed cell at the right (~263 pt each in a ~530 pt content area).
 function rowView(r) {
   const t = T[lang];
   const day = dayLabel(r.d);
   const sub = r.p && !r.p.fixed ? r.ev.date + " · " + t.everyYear : r.ev.date;
-  return fenn.row([
+  return fenn.grid(2, [
     fenn.column([
       fenn.text(r.ev.name, { size: "body", bold: true }),
       fenn.text(sub, { size: "small", color: "dim" }),
     ], { gap: 0 }),
-    fenn.spacer(),
-    fenn.text(day.text, { size: "small", color: day.color }),
-    fenn.button("del:" + r.ev.id, { icon: "trash", tooltip: t.del }),
-  ], { align: "center", gap: 8 });
+    fenn.row([
+      fenn.text(day.text, { size: "small", color: day.color }),
+      fenn.button("del:" + r.ev.id, { icon: "trash", tooltip: t.del }),
+    ], { align: "center", gap: 6 }),
+  ], { gap: 4 });
 }
 
 function pageView(rows) {
   const t = T[lang];
   const children = [
-    fenn.row([fenn.spacer(), fenn.button("lang", { icon: "translate", tooltip: t.langName })], { align: "center" }),
     fenn.row([
-      fenn.textInput("name:" + formSeq, "", { hint: t.nameHint, live: true, width: 220 }),
-      fenn.textInput("date:" + formSeq, "", { hint: t.dateHint, live: true, width: 170 }),
+      fenn.textInput("name:" + formSeq, "", { hint: t.nameHint, live: true, width: 190 }),
+      fenn.textInput("date:" + formSeq, "", { hint: t.dateHint, live: true, width: 150 }),
       fenn.button("add", { label: t.add, icon: "plus", primary: true }),
+      fenn.button("lang", { icon: "translate", tooltip: t.langName }),
     ], { gap: 6, align: "center" }),
   ];
-  if (err) children.push(fenn.text(err, { size: "small", color: "orange" }));
+  if (err) children.push(fenn.text(err, { size: "small", color: "orange", wrap: true }));
   if (!rows.length) {
     children.push(fenn.text(t.empty, { size: "small", color: "dim" }));
   } else {
     for (const r of rows) children.push(rowView(r));
   }
-  return fenn.column(children, { gap: 8, scroll: true });
+  // Layout rules: no spacers, justify start, gap 8, nothing spreads.
+  // Height budget (page_size [568, 380]; content = 380 - 45 = 335 pt):
+  //   form row 40 + gap 8 + error line 18 + gap 8 + 5 list rows 36 each
+  //   + 4 gaps 8 = 286 <= 335  (rows 6+ scroll: the list is unbounded)
+  return fenn.column(children, { gap: 8, justify: "start", scroll: true });
 }
 
 function draw() {

@@ -3,6 +3,12 @@
 // Live plugin: redraws only on events. Randomness is uniform via crypto.randomInt.
 const crypto = require("crypto");
 const fenn = require("./fenn");
+// Fenn 0.4.0 uyumluluk: `row` + align:"center" satiri dikey yayiyor; varsayilan hizalama sikipaketler.
+const _row = fenn.row;
+fenn.row = (c, o = {}) => {
+  if (o.align === "center") { const { align, ...rest } = o; return _row(c, rest); }
+  return _row(c, o);
+};
 const app = new fenn.Plugin();
 
 // ---- strings (TR + EN) ----
@@ -66,7 +72,6 @@ let lower = !opts || typeof opts.lower !== "boolean" ? true : opts.lower;
 let digits = !opts || typeof opts.digits !== "boolean" ? true : opts.digits;
 let symbols = !opts || typeof opts.symbols !== "boolean" ? false : opts.symbols;
 let result = "";
-let outSeq = 0;
 let status = null; // { text, color }
 
 function save() {
@@ -134,7 +139,6 @@ function generate() {
     chars[j] = tmp;
   }
   result = chars.join("");
-  outSeq += 1; // fresh id, so the result is always shown new
   status = null;
   draw();
 }
@@ -148,40 +152,45 @@ function tileView() {
   });
 }
 
+// Layout rules: no spacers, justify start, gap 8 / padding 8, nothing spreads.
+// Height budget (page_size [568, 360]; content = 360 - 45 = 315 pt):
+//   result card 100 (padding 16 + info row 36 + gap 8 + password 2 lines 40)
+//   + gap 8 + slider 40 + gap 8 + toggle row 36 + gap 8 + toggle row 36
+//   + gap 8 + generate row 32 = 276 <= 315  (39 pt spare)
 function pageView() {
   const t = T[lang];
   const level = LEVELS[lang][levelIndex()];
+  const info = [fenn.text(t.strength + ": " + level, { size: "small", color: "dim" })];
+  if (status) info.push(fenn.text(status.text, { size: "small", color: status.color, wrap: true }));
   return fenn.column([
-    fenn.row([fenn.spacer(), fenn.button("lang", { icon: "translate", tooltip: t.langName })], { align: "center" }),
-    fenn.row([
-      fenn.text(t.length + ":", { size: "small", color: "dim" }),
-      fenn.slider("len", len, { min: 4, max: 64, step: 1, width: 320 }),
-      fenn.text(String(len), { size: "body", bold: true }),
-    ], { gap: 8, align: "center" }),
-    fenn.grid(2, [
-      fenn.toggle("opt:upper", upper, { label: t.upper }),
-      fenn.toggle("opt:lower", lower, { label: t.lower }),
-      fenn.toggle("opt:digits", digits, { label: t.digits }),
-      fenn.toggle("opt:symbols", symbols, { label: t.symbols }),
-    ], { gap: 6 }),
-    fenn.row([
-      fenn.button("gen", { label: t.generate, icon: "arrows-clockwise", primary: true }),
-      fenn.button("copy", { label: t.copy, icon: "copy" }),
-      fenn.spacer(),
-      fenn.ring(strength(), { size: 26 }),
-      fenn.column([
-        fenn.text(t.strength, { size: "small", color: "dim" }),
-        fenn.text(level, { size: "body", bold: true }),
-      ], { gap: 0 }),
-    ], { gap: 8, align: "center" }),
-    // The result is shown fresh every time: a new id per generated password.
-    fenn.column([
+    fenn.card([
+      fenn.row([
+        fenn.ring(strength(), { size: 32, label: pctLabel(), tooltip: t.strength + ": " + level }),
+        fenn.column(info, { gap: 2 }),
+        fenn.button("copy", { label: t.copy, icon: "copy" }),
+      ], { gap: 8, align: "center" }),
       result
         ? fenn.text(result, { mono: true, wrap: true })
-        : fenn.text(t.noResult, { size: "small", color: "dim" }),
-    ], { gap: 0, id: "out:" + outSeq }),
-    status ? fenn.text(status.text, { size: "small", color: status.color }) : fenn.divider(),
-  ], { gap: 8, scroll: true });
+        : fenn.text(t.noResult, { size: "small", color: "dim", wrap: true }),
+    ], { padding: 8, gap: 8 }),
+    fenn.row([
+      fenn.text(t.length + ":", { size: "small", color: "dim" }),
+      fenn.slider("len", len, { min: 4, max: 64, step: 1, width: 340 }),
+      fenn.text(String(len), { size: "body", bold: true }),
+    ], { gap: 8, align: "center" }),
+    fenn.row([
+      fenn.toggle("opt:upper", upper, { label: t.upper }),
+      fenn.toggle("opt:lower", lower, { label: t.lower }),
+    ], { gap: 8, align: "center" }),
+    fenn.row([
+      fenn.toggle("opt:digits", digits, { label: t.digits }),
+      fenn.toggle("opt:symbols", symbols, { label: t.symbols }),
+    ], { gap: 8, align: "center" }),
+    fenn.row([
+      fenn.button("gen", { label: t.generate, icon: "arrows-clockwise", primary: true }),
+      fenn.button("lang", { icon: "translate", tooltip: t.langName }),
+    ], { gap: 8, align: "center" }),
+  ], { gap: 8, justify: "start", scroll: true });
 }
 
 function draw() {
